@@ -189,16 +189,24 @@ def greedy_order_route(adj_matrix, start_node, targets):
 async def route(data: WarehouseInput):
     """
     Simplified endpoint matching exact JSON specification:
-    - Input: grid with 0=walkable, 1=obstacle, 2=target, start position, targets array
+    - Input: grid with 0=walkable, 1=obstacle, 2=target, start position, targets array (optional)
     - Output: total_steps, path, target_reached, execution_time_ms
     """
-    validate_input(data)
+    # Extract targets from grid (cells marked with 2) if not provided
+    targets_from_grid = []
+    for r in range(len(data.grid)):
+        for c in range(len(data.grid[r])):
+            if data.grid[r][c] == 2:
+                targets_from_grid.append([r, c])
     
-    if len(data.targets) == 0:
+    # Use targets from grid if available, otherwise use targets from input
+    targets_to_use = targets_from_grid if targets_from_grid else data.targets
+    
+    if len(targets_to_use) == 0:
         raise HTTPException(400, "At least one target is required")
     
     start_node = tuple(data.start)
-    target_node = tuple(data.targets[0])  # Use first target
+    target_node = tuple(targets_to_use[0])  # Use first target
     
     started = perf_counter()
     path = a_star(data.grid, start_node, target_node)
@@ -222,9 +230,19 @@ async def route(data: WarehouseInput):
 
 @app.post("/calculate-route")
 async def calculate_route(data: WarehouseInput):
+    # Extract targets from grid (cells marked with 2) if not provided
+    targets_from_grid = []
+    for r in range(len(data.grid)):
+        for c in range(len(data.grid[r])):
+            if data.grid[r][c] == 2:
+                targets_from_grid.append([r, c])
+    
+    # Use targets from grid if available, otherwise use targets from input
+    targets_list = targets_from_grid if targets_from_grid else data.targets
+    
     validate_input(data)
     start_node = tuple(data.start)
-    targets = [tuple(t) for t in data.targets]
+    targets = [tuple(t) for t in targets_list]
     nodes = [start_node] + targets
 
     started = perf_counter()
@@ -241,19 +259,31 @@ async def calculate_route(data: WarehouseInput):
     return {
         "total_steps": min_steps,
         "path": best_path,
+        "target_reached": len(targets) > 0,
         "targets_collected": len(targets),
         "best_order": [list(point) for point in best_order],
         "baseline_steps": int(direct_steps),
         "improvement_percent": improvement,
+        "execution_time_ms": elapsed_ms,
         "compute_time_ms": elapsed_ms,
     }
 
 
 @app.post("/compare-algorithms")
 async def compare_algorithms(data: WarehouseInput):
+    # Extract targets from grid (cells marked with 2) if not provided
+    targets_from_grid = []
+    for r in range(len(data.grid)):
+        for c in range(len(data.grid[r])):
+            if data.grid[r][c] == 2:
+                targets_from_grid.append([r, c])
+    
+    # Use targets from grid if available, otherwise use targets from input
+    targets_list = targets_from_grid if targets_from_grid else data.targets
+    
     validate_input(data)
     start_node = tuple(data.start)
-    targets = [tuple(t) for t in data.targets]
+    targets = [tuple(t) for t in targets_list]
     nodes = [start_node] + targets
 
     a_started = perf_counter()
@@ -304,6 +334,123 @@ async def compare_algorithms(data: WarehouseInput):
             },
         ]
     }
+
+
+@app.post("/verify-accuracy")
+async def verify_accuracy(data: WarehouseInput):
+    """
+    Analyzes algorithm performance and explains why the chosen algorithm is optimal.
+    Returns accuracy percentage and reasoning.
+    """
+    # Extract targets from grid
+    targets_from_grid = []
+    for r in range(len(data.grid)):
+        for c in range(len(data.grid[r])):
+            if data.grid[r][c] == 2:
+                targets_from_grid.append([r, c])
+    
+    targets_list = targets_from_grid if targets_from_grid else data.targets
+    
+    if len(targets_list) == 0:
+        raise HTTPException(400, "At least one target is required")
+    
+    validate_input(data)
+    start_node = tuple(data.start)
+    targets = [tuple(t) for t in targets_list]
+    nodes = [start_node] + targets
+    
+    # Test all algorithms
+    # A* Algorithm
+    a_start = perf_counter()
+    a_adj = build_adj_matrix(data.grid, nodes, a_star)
+    a_path, a_steps, a_order = optimal_order_route(a_adj, start_node, targets)
+    a_time = round((perf_counter() - a_start) * 1000, 2)
+    
+    # Dijkstra Algorithm
+    d_start = perf_counter()
+    d_adj = build_adj_matrix(data.grid, nodes, dijkstra)
+    d_path, d_steps, d_order = optimal_order_route(d_adj, start_node, targets)
+    d_time = round((perf_counter() - d_start) * 1000, 2)
+    
+    # Greedy Algorithm
+    g_start = perf_counter()
+    g_path, g_steps, g_order = greedy_order_route(a_adj, start_node, targets)
+    g_time = round((perf_counter() - g_start) * 1000, 2)
+    
+    # Calculate theoretical minimum (Manhattan distance)
+    theoretical_min = 0
+    current = start_node
+    for target in a_order:
+        theoretical_min += manhattan(current, target)
+        current = target
+    
+    # Determine best algorithm
+    best_steps = min(a_steps, d_steps, g_steps)
+    fastest_time = min(a_time, d_time, g_time)
+    
+    # Calculate accuracy for each algorithm
+    a_accuracy = round((theoretical_min / a_steps) * 100, 2) if a_steps > 0 else 100
+    d_accuracy = round((theoretical_min / d_steps) * 100, 2) if d_steps > 0 else 100
+    g_accuracy = round((theoretical_min / g_steps) * 100, 2) if g_steps > 0 else 100
+    
+    # Determine chosen algorithm (A* is default)
+    chosen_algorithm = "A* Algorithm"
+    chosen_steps = a_steps
+    chosen_time = a_time
+    chosen_accuracy = a_accuracy
+    
+    # Reasoning for choosing A*
+    reasons = []
+    if a_steps == best_steps:
+        reasons.append("Produces optimal path length")
+    if a_time == fastest_time:
+        reasons.append("Fastest computation time")
+    reasons.append("Uses Manhattan heuristic for efficient pathfinding")
+    reasons.append("Guarantees shortest path in grid-based navigation")
+    reasons.append("Balances optimality with computational efficiency")
+    
+    # Performance comparison
+    performance_vs_dijkstra = round(((d_time - a_time) / d_time * 100), 2) if d_time > 0 else 0
+    performance_vs_greedy = round(((a_steps - g_steps) / a_steps * 100), 2) if a_steps > 0 else 0
+    
+    return {
+        "chosen_algorithm": chosen_algorithm,
+        "accuracy_percentage": chosen_accuracy,
+        "path_optimality": "Perfect" if chosen_accuracy == 100 else "Near-Optimal" if chosen_accuracy >= 95 else "Good" if chosen_accuracy >= 85 else "Fair",
+        "total_steps": chosen_steps,
+        "theoretical_minimum": theoretical_min,
+        "computation_time_ms": chosen_time,
+        "reasoning": {
+            "why_chosen": reasons,
+            "key_advantage": "A* combines Dijkstra's optimality guarantee with heuristic-guided search, making it ideal for warehouse routing where both path quality and speed matter.",
+            "vs_dijkstra": f"A* is {abs(performance_vs_dijkstra)}% {'faster' if performance_vs_dijkstra > 0 else 'comparable'} than Dijkstra",
+            "vs_greedy": f"A* produces {abs(performance_vs_greedy)}% {'better' if a_steps < g_steps else 'similar'} path quality than Greedy approach"
+        },
+        "algorithm_comparison": [
+            {
+                "name": "A* (Chosen)",
+                "steps": a_steps,
+                "time_ms": a_time,
+                "accuracy": a_accuracy,
+                "is_best": a_steps == best_steps
+            },
+            {
+                "name": "Dijkstra",
+                "steps": d_steps,
+                "time_ms": d_time,
+                "accuracy": d_accuracy,
+                "is_best": d_steps == best_steps
+            },
+            {
+                "name": "Greedy",
+                "steps": g_steps,
+                "time_ms": g_time,
+                "accuracy": g_accuracy,
+                "is_best": g_steps == best_steps
+            }
+        ]
+    }
+
 
 # --- SERVE THE FRONTEND ---
 @app.get("/", response_class=HTMLResponse)
