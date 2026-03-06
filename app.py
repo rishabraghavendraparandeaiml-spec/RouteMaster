@@ -185,6 +185,41 @@ def greedy_order_route(adj_matrix, start_node, targets):
 
 
 # --- API ENDPOINT ---
+@app.post("/route")
+async def route(data: WarehouseInput):
+    """
+    Simplified endpoint matching exact JSON specification:
+    - Input: grid with 0=walkable, 1=obstacle, 2=target, start position, targets array
+    - Output: total_steps, path, target_reached, execution_time_ms
+    """
+    validate_input(data)
+    
+    if len(data.targets) == 0:
+        raise HTTPException(400, "At least one target is required")
+    
+    start_node = tuple(data.start)
+    target_node = tuple(data.targets[0])  # Use first target
+    
+    started = perf_counter()
+    path = a_star(data.grid, start_node, target_node)
+    elapsed_ms = round((perf_counter() - started) * 1000, 2)
+    
+    if path is None:
+        return {
+            "total_steps": 0,
+            "path": [],
+            "target_reached": False,
+            "execution_time_ms": elapsed_ms,
+        }
+    
+    return {
+        "total_steps": len(path) - 1,  # Steps = path length - 1
+        "path": path,
+        "target_reached": True,
+        "execution_time_ms": elapsed_ms,
+    }
+
+
 @app.post("/calculate-route")
 async def calculate_route(data: WarehouseInput):
     validate_input(data)
