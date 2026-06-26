@@ -1,703 +1,862 @@
-fastes<!DOCTYPE html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RouteMaster AI</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body {
-            font-family: 'Manrope', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-            min-height: 100vh;
-            transition: background 0.3s, color 0.3s;
-        }
-        body.light {
-            background: linear-gradient(120deg, #f4f7ff 0%, #f9f4ff 45%, #eef9f7 100%);
-            color: #1e293b;
-        }
-        body.dark {
-            background: linear-gradient(120deg, #0f172a 0%, #1e1b4b 45%, #064e3b 100%);
-            color: #e2e8f0;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RouteMaster AI – Smart Warehouse Routing</title>
+  <meta name="description" content="Optimize warehouse routes using A*, Dijkstra, and Greedy algorithms on a custom grid map." />
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: linear-gradient(135deg, #f0f4ff 0%, #f9f0ff 50%, #edfdf8 100%);
+      --card: rgba(255,255,255,0.85);
+      --border: #e0e7ff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --accent: #6366f1;
+      --accent2: #8b5cf6;
+      --cell-free: #eef2ff;
+      --cell-wall: #cbd5e1;
+      --cell-path: #99f6e4;
+      --cell-start-bg: #dcfce7;
+      --cell-target-bg: #fef3c7;
+    }
+    body.dark {
+      --bg: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #064e3b 100%);
+      --card: rgba(30,41,59,0.9);
+      --border: #334155;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #818cf8;
+      --accent2: #a78bfa;
+      --cell-free: #1e293b;
+      --cell-wall: #475569;
+      --cell-path: #134e4a;
+      --cell-start-bg: #14532d;
+      --cell-target-bg: #78350f;
+    }
+
+    html, body { min-height: 100vh; font-family: 'Inter', system-ui, sans-serif; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      transition: background 0.3s, color 0.3s;
+      padding: 24px 16px 48px;
+    }
+
+    /* ---------- LAYOUT ---------- */
+    .container { max-width: 1280px; margin: 0 auto; }
+    .header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      margin-bottom: 28px; gap: 12px;
+    }
+    .header-center { flex: 1; text-align: center; }
+    .title {
+      font-size: 2rem; font-weight: 800; letter-spacing: -0.5px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .subtitle { color: var(--muted); margin-top: 4px; font-size: 0.95rem; }
+
+    .grid-layout {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+    @media (max-width: 860px) {
+      .grid-layout { grid-template-columns: 1fr; }
+      .title { font-size: 1.4rem; }
+    }
+
+    /* ---------- CARDS ---------- */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 20px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 4px 24px rgba(99,102,241,0.07);
+    }
+    .card-title {
+      font-size: 1rem; font-weight: 700;
+      color: var(--accent); margin-bottom: 14px;
+    }
+
+    /* ---------- CONTROLS ---------- */
+    label { font-size: 0.82rem; color: var(--muted); display: block; margin-bottom: 4px; }
+    input[type="text"], input[type="number"] {
+      width: 100%; padding: 8px 12px; border-radius: 10px;
+      border: 1.5px solid var(--border); background: var(--card);
+      color: var(--text); font-family: inherit; font-size: 0.9rem;
+      outline: none; transition: border-color 0.2s;
+    }
+    input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
+    .field { margin-bottom: 12px; }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 8px 16px; border-radius: 12px; border: none; cursor: pointer;
+      font-family: inherit; font-size: 0.88rem; font-weight: 600;
+      transition: transform 0.12s, box-shadow 0.12s, opacity 0.12s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--accent2); box-shadow: 0 4px 14px rgba(99,102,241,0.35); }
+    .btn-ghost { background: #e0e7ff; color: #3730a3; }
+    body.dark .btn-ghost { background: #1e274a; color: #a5b4fc; }
+    .btn-ghost:hover { background: #c7d2fe; }
+    body.dark .btn-ghost:hover { background: #273060; }
+    .btn-danger { background: #fee2e2; color: #991b1b; }
+    body.dark .btn-danger { background: #450a0a; color: #fca5a5; }
+    .btn-danger:hover { background: #fecaca; }
+    .btn-teal { background: #14b8a6; color: #fff; }
+    .btn-teal:hover:not(:disabled) { background: #0d9488; box-shadow: 0 4px 14px rgba(20,184,166,0.3); }
+    .btn-violet { background: #7c3aed; color: #fff; }
+    .btn-violet:hover:not(:disabled) { background: #6d28d9; box-shadow: 0 4px 14px rgba(124,58,237,0.3); }
+    .btn-amber { background: #f59e0b; color: #fff; }
+    .btn-amber:hover:not(:disabled) { background: #d97706; box-shadow: 0 4px 14px rgba(245,158,11,0.3); }
+    .btn-full { width: 100%; margin-bottom: 8px; }
+
+    .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+    .mode-btn {
+      padding: 8px; border-radius: 10px; border: 2px solid transparent;
+      font-size: 0.82rem; font-weight: 600; cursor: pointer; font-family: inherit;
+      background: var(--cell-free); color: var(--accent); transition: all 0.15s;
+    }
+    body.dark .mode-btn { background: #1e293b; }
+    .mode-btn.active { background: var(--accent); color: #fff; border-color: var(--accent2); }
+
+    /* ---------- THEME TOGGLE ---------- */
+    #themeBtn {
+      width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
+      font-size: 1.3rem; display: flex; align-items: center; justify-content: center;
+      background: #1e293b; color: #fbbf24; flex-shrink: 0;
+      transition: background 0.2s, transform 0.2s;
+    }
+    body.dark #themeBtn { background: #fbbf24; color: #1e293b; }
+    #themeBtn:hover { transform: scale(1.1); }
+
+    /* ---------- ALERT / ERROR ---------- */
+    .alert {
+      padding: 10px 14px; border-radius: 12px; font-size: 0.88rem;
+      margin-bottom: 12px; display: none;
+    }
+    .alert.show { display: block; }
+    .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+    body.dark .alert-error { background: #450a0a; color: #fca5a5; border-color: #7f1d1d; }
+
+    /* ---------- ACTION BUTTONS ROW ---------- */
+    .action-row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+    .action-row .btn { padding: 10px 20px; border-radius: 50px; font-size: 0.9rem; }
+
+    /* ---------- WAREHOUSE GRID ---------- */
+    #gridWrapper { position: relative; display: inline-block; }
+    #routeSvg { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 5; }
+    #warehouseGrid {
+      display: grid;
+      gap: 6px;
+      position: relative;
+      z-index: 10;
+    }
+    .cell {
+      width: 52px; height: 52px;
+      border-radius: 10px;
+      border: 2px solid transparent;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.25rem;
+      cursor: pointer;
+      background: var(--cell-free);
+      transition: background 0.12s, transform 0.1s, box-shadow 0.15s;
+      user-select: none;
+      position: relative;
+    }
+    .cell:hover { transform: scale(1.06); box-shadow: 0 4px 12px rgba(99,102,241,0.25); }
+    .cell.wall { background: var(--cell-wall); }
+    .cell.start-cell { background: var(--cell-start-bg); border-color: #22c55e; }
+    .cell.target-cell { background: var(--cell-target-bg); border-color: #f59e0b; }
+    .cell.on-path { background: var(--cell-path); }
+    .cell.robot { box-shadow: 0 0 0 3px #22d3ee; }
+    .cell .step-num {
+      position: absolute; bottom: 2px; right: 4px;
+      font-size: 0.6rem; font-weight: 700; color: var(--muted); line-height: 1;
+    }
+
+    /* ---------- LEGEND ---------- */
+    .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; font-size: 0.82rem; color: var(--muted); }
+    .legend-item { display: flex; align-items: center; gap: 5px; }
+    .legend-dot { width: 18px; height: 18px; border-radius: 5px; }
+
+    /* ---------- STATS ---------- */
+    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 16px; }
+    .stat-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 14px; padding: 12px;
+    }
+    .stat-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-value { font-size: 1.5rem; font-weight: 800; color: var(--text); margin-top: 2px; }
+    .stat-value.green { color: #22c55e; }
+
+    /* ---------- TABLE ---------- */
+    .table-wrap {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 14px; overflow: hidden; margin-top: 16px;
+    }
+    .table-wrap h3 { padding: 12px 16px 8px; font-size: 0.95rem; font-weight: 700; color: var(--accent); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th { text-align: left; padding: 8px 16px; color: var(--muted); border-bottom: 1px solid var(--border); font-weight: 600; }
+    td { padding: 10px 16px; border-bottom: 1px solid var(--border); }
+    tr:last-child td { border-bottom: none; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; }
+    .badge-green { background: #dcfce7; color: #15803d; }
+    .badge-violet { background: #ede9fe; color: #5b21b6; }
+    .badge-blue { background: #dbeafe; color: #1d4ed8; }
+    body.dark .badge-green { background: #14532d; color: #86efac; }
+    body.dark .badge-violet { background: #2e1065; color: #c4b5fd; }
+    body.dark .badge-blue { background: #0c2a4a; color: #93c5fd; }
+
+    /* ---------- ACCURACY PANEL ---------- */
+    .accuracy-panel { margin-top: 16px; }
+    .acc-hero {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;
+    }
+    .acc-card {
+      border-radius: 14px; padding: 16px;
+      background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+      border: 1px solid #a7f3d0;
+    }
+    body.dark .acc-card { background: linear-gradient(135deg, #064e3b, #065f46); border-color: #047857; }
+    .acc-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #059669; }
+    body.dark .acc-label { color: #6ee7b7; }
+    .acc-algo { font-size: 1.2rem; font-weight: 800; margin-top: 4px; }
+    .acc-pct { font-size: 2.5rem; font-weight: 900; color: #059669; margin-top: 4px; }
+    body.dark .acc-pct { color: #34d399; }
+    .acc-metrics {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 14px; padding: 14px;
+    }
+    .acc-metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .acc-metric-label { font-size: 0.72rem; color: var(--muted); }
+    .acc-metric-val { font-size: 1.1rem; font-weight: 700; }
+
+    /* ---------- SPINNER ---------- */
+    .spinner {
+      width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3);
+      border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Info box */
+    .info-box {
+      background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 12px;
+      padding: 12px; font-size: 0.8rem; color: #4338ca; margin-top: 12px; line-height: 1.6;
+    }
+    body.dark .info-box { background: #1e1b4b; border-color: #3730a3; color: #a5b4fc; }
+
+    /* Divider */
+    .divider { height: 1px; background: var(--border); margin: 14px 0; }
+
+    /* Hidden sub-inputs */
+    .sub-input { display: none; }
+    .sub-input.open { display: block; }
+    .sub-input-wrap {
+      border-radius: 12px; padding: 12px; margin-bottom: 10px;
+      border: 1px solid var(--border);
+      background: var(--card);
+    }
+    .sub-input-wrap .sub-label { font-size: 0.78rem; font-weight: 700; margin-bottom: 6px; }
+    .sub-input-wrap.start-wrap { border-color: #86efac; background: #f0fdf4; }
+    body.dark .sub-input-wrap.start-wrap { background: #052e16; border-color: #166534; }
+    .sub-input-wrap.target-wrap { border-color: #fcd34d; background: #fffbeb; }
+    body.dark .sub-input-wrap.target-wrap { background: #431407; border-color: #92400e; }
+    .row2 { display: flex; gap: 6px; }
+
+    /* Scroll for right panel */
+    #rightPanel { overflow-x: auto; }
+  </style>
 </head>
-<body class="antialiased">
-    <div id="root"></div>
-    <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+<body>
+<div class="container">
 
-        const MODES = {
-            OBSTACLE: 'obstacle',
-            START: 'start',
-            TARGET: 'target',
-            ERASE: 'erase'
-        };
+  <!-- Header -->
+  <div class="header">
+    <div style="width:44px"></div>
+    <div class="header-center">
+      <h1 class="title">🗺️ RouteMaster AI</h1>
+      <p class="subtitle">Smart Warehouse Routing — A*, Dijkstra & Greedy algorithms visualized</p>
+    </div>
+    <button id="themeBtn" title="Toggle theme">🌙</button>
+  </div>
 
-        const CELL_SIZE = 52;
-        const CELL_GAP = 8;
+  <!-- Main grid -->
+  <div class="grid-layout">
 
-        function App() {
-            const [rows, setRows] = useState(6);
-            const [cols, setCols] = useState(8);
-            const [gridSizeInput, setGridSizeInput] = useState('[6, 8]');
-            const [grid, setGrid] = useState(Array.from({ length: 6 }, () => Array(8).fill(0)));
-            const [start, setStart] = useState([0, 0]);
-            const [startInput, setStartInput] = useState('[0, 0]');
-            const [targetsInput, setTargetsInput] = useState('[[2, 1]]');
-            const [showStartInput, setShowStartInput] = useState(false);
-            const [showTargetInput, setShowTargetInput] = useState(false);
-            const [mode, setMode] = useState(MODES.OBSTACLE);
-            const [isDarkMode, setIsDarkMode] = useState(false);
-            const [path, setPath] = useState([]);
-            const [stats, setStats] = useState(null);
-            const [comparison, setComparison] = useState([]);
-            const [accuracy, setAccuracy] = useState(null);
-            const [error, setError] = useState('');
-            const [loading, setLoading] = useState(false);
-            const [animatedIndex, setAnimatedIndex] = useState(-1);
-            const animationRef = useRef(null);
+    <!-- Left panel: Controls -->
+    <div class="card">
+      <div class="card-title">⚙️ Build Scenario</div>
 
-            const clearAnimation = () => {
-                if (animationRef.current) {
-                    clearInterval(animationRef.current);
-                    animationRef.current = null;
-                }
-            };
+      <div class="field">
+        <label>Grid Size [rows, cols]</label>
+        <input id="gridSizeInput" type="text" value="[6, 8]" placeholder="[6, 8]" />
+      </div>
+      <button class="btn btn-primary btn-full" onclick="createGrid()">Create New Grid</button>
 
-            useEffect(() => {
-                return () => clearAnimation();
-            }, []);
+      <div class="divider"></div>
 
-            useEffect(() => {
-                document.body.className = isDarkMode ? 'dark antialiased' : 'light antialiased';
-            }, [isDarkMode]);
+      <label style="margin-bottom:8px">Drawing Tool</label>
+      <div class="mode-grid">
+        <button class="mode-btn active" id="modeObstacle" onclick="setMode('obstacle')">🪨 Obstacle</button>
+        <button class="mode-btn" id="modeErase" onclick="setMode('erase')">🧹 Erase</button>
+        <button class="mode-btn" id="modeStart" onclick="toggleStartInput()">🚗 Set Start</button>
+        <button class="mode-btn" id="modeTarget" onclick="toggleTargetInput()">🏠 Set Target</button>
+      </div>
 
-            const toggleTheme = () => {
-                setIsDarkMode(!isDarkMode);
-            };
+      <!-- Start sub-input -->
+      <div class="sub-input" id="startSubInput">
+        <div class="sub-input-wrap start-wrap">
+          <div class="sub-label" style="color:#15803d">Start Position [row, col]</div>
+          <input id="startInput" type="text" value="[0, 0]" placeholder="[0, 0]" />
+          <div class="row2" style="margin-top:8px">
+            <button class="btn btn-primary" style="flex:1" onclick="applyStart()">Apply</button>
+            <button class="btn btn-ghost" onclick="closeStartInput()">Cancel</button>
+          </div>
+        </div>
+      </div>
 
-            const isStart = (r, c) => start[0] === r && start[1] === c;
-            const isTarget = (r, c) => grid[r] && grid[r][c] === 2;
-            
-            // Extract targets from grid (cells marked with 2)
-            const getTargets = () => {
-                const targets = [];
-                for (let r = 0; r < grid.length; r++) {
-                    for (let c = 0; c < grid[r].length; c++) {
-                        if (grid[r][c] === 2) {
-                            targets.push([r, c]);
-                        }
-                    }
-                }
-                return targets;
-            };
+      <!-- Target sub-input -->
+      <div class="sub-input" id="targetSubInput">
+        <div class="sub-input-wrap target-wrap">
+          <div class="sub-label" style="color:#92400e">Targets [[row,col], ...]</div>
+          <input id="targetsInput" type="text" value="[[2, 1]]" placeholder="[[2, 1], [4, 5]]" />
+          <div class="row2" style="margin-top:8px">
+            <button class="btn btn-amber" style="flex:1" onclick="applyTargets()">Apply</button>
+            <button class="btn btn-ghost" onclick="closeTargetInput()">Cancel</button>
+          </div>
+        </div>
+      </div>
 
+      <button class="btn btn-danger btn-full" onclick="resetBoard()">↺ Reset Board</button>
 
+      <div class="divider"></div>
 
-            const createGrid = () => {
-                setError('');
-                try {
-                    const parsedSize = JSON.parse(gridSizeInput);
-                    if (!Array.isArray(parsedSize) || parsedSize.length !== 2) {
-                        throw new Error('Grid size must be [rows, cols]');
-                    }
-                    const [inputRows, inputCols] = parsedSize;
-                    const nextRows = Math.max(1, Math.min(20, Number(inputRows)));
-                    const nextCols = Math.max(1, Math.min(20, Number(inputCols)));
-                    
-                    setRows(nextRows);
-                    setCols(nextCols);
-                    setGridSizeInput(`[${nextRows}, ${nextCols}]`);
-                    setGrid(Array.from({ length: nextRows }, () => Array(nextCols).fill(0)));
-                    setStart([0, 0]);
-                    clearAnimation();
-                    setAnimatedIndex(-1);
-                    setPath([]);
-                    setStats(null);
-                    setComparison([]);
-                } catch (e) {
-                    setError(`Invalid grid size: ${e.message}`);
-                }
-            };
+      <div style="font-size:0.82rem; color:var(--muted); line-height:1.8">
+        <div>🚗 Start: <strong id="startInfo">[0, 0]</strong></div>
+        <div>🏠 Targets: <strong id="targetInfo">0</strong></div>
+        <div>🪨 Obstacles: <strong id="obstacleInfo">0</strong></div>
+        <div style="font-size:0.75rem; margin-top:4px">Grid: <strong id="gridInfo">6 × 8</strong></div>
+      </div>
 
-            const applyCellAction = (r, c) => {
-                setError('');
-                clearAnimation();
-                setAnimatedIndex(-1);
-                setPath([]);
+      <div class="info-box">
+        <strong>Guide:</strong><br>
+        1. Set Start → enter [row, col]<br>
+        2. Set Target → enter [[r,c], ...]<br>
+        3. Click cells to add obstacles<br>
+        4. Click <em>Optimize Route</em>
+      </div>
+    </div>
 
-                if (mode === MODES.START) {
-                    if (grid[r][c] === 1) return;
-                    setStart([r, c]);
-                    return;
-                }
+    <!-- Right panel -->
+    <div id="rightPanel">
+      <div class="card">
 
-                if (mode === MODES.TARGET) {
-                    if (grid[r][c] === 1 || isStart(r, c)) return;
-                    setGrid((prevGrid) => {
-                        const nextGrid = prevGrid.map((row) => [...row]);
-                        if (isTarget(r, c)) {
-                            nextGrid[r][c] = 0; // Remove target
-                        } else {
-                            nextGrid[r][c] = 2; // Set target
-                        }
-                        return nextGrid;
-                    });
-                    return;
-                }
+        <!-- Action row -->
+        <div class="action-row">
+          <button class="btn btn-teal" id="btnOptimize" onclick="runOptimization()">
+            <span id="optimizeLabel">⚡ Optimize Route</span>
+          </button>
+          <button class="btn btn-violet" id="btnCompare" onclick="runComparison()">
+            <span id="compareLabel">📊 Compare Algorithms</span>
+          </button>
+          <button class="btn btn-amber" id="btnAccuracy" onclick="verifyAccuracy()">
+            <span id="accuracyLabel">🎯 Verify Accuracy</span>
+          </button>
+        </div>
 
-                setGrid((prevGrid) => {
-                    const nextGrid = prevGrid.map((row) => [...row]);
+        <!-- Error -->
+        <div class="alert alert-error" id="errorBox"></div>
 
-                    if (mode === MODES.OBSTACLE) {
-                        if (isStart(r, c)) return nextGrid;
-                        nextGrid[r][c] = 1;
-                    }
+        <!-- Grid -->
+        <div id="gridWrapper">
+          <svg id="routeSvg" style="overflow:visible"></svg>
+          <div id="warehouseGrid"></div>
+        </div>
 
-                    if (mode === MODES.ERASE) {
-                        nextGrid[r][c] = 0;
-                    }
+        <!-- Legend -->
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:#cbd5e1"></div> Obstacle</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#dcfce7; border:2px solid #22c55e"></div> Start</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#fef3c7; border:2px solid #f59e0b"></div> Target</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#99f6e4"></div> Route path</div>
+        </div>
 
-                    return nextGrid;
-                });
-            };
+        <!-- Stats -->
+        <div id="statsSection" style="display:none">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-label">Total Steps</div>
+              <div class="stat-value" id="statSteps">—</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Target Reached</div>
+              <div class="stat-value green" id="statReached">—</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Execution Time</div>
+              <div class="stat-value" id="statTime">—</div>
+            </div>
+          </div>
+        </div>
 
-            const resetBoard = () => {
-                setGrid(Array.from({ length: rows }, () => Array(cols).fill(0)));
-                setStart([0, 0]);
-                setStartInput('[0, 0]');
-                setTargetsInput('[]');
-                setShowStartInput(false);
-                setShowTargetInput(false);
-                clearAnimation();
-                setAnimatedIndex(-1);
-                setPath([]);
-                setStats(null);
-                setComparison([]);
-                setError('');
-            };
+        <!-- Comparison Table -->
+        <div id="comparisonSection" style="display:none">
+          <div class="table-wrap">
+            <h3>📊 Algorithm Comparison</h3>
+            <table>
+              <thead>
+                <tr><th>Algorithm</th><th>Steps</th><th>Compute Time</th><th>Highlights</th></tr>
+              </thead>
+              <tbody id="comparisonBody"></tbody>
+            </table>
+          </div>
+        </div>
 
-            const applyStartInput = () => {
-                setError('');
-                try {
-                    const parsedStart = JSON.parse(startInput);
-                    if (!Array.isArray(parsedStart) || parsedStart.length !== 2) {
-                        throw new Error('Start must be [row, col]');
-                    }
-                    const [r, c] = parsedStart;
-                    if (r < 0 || r >= rows || c < 0 || c >= cols) {
-                        throw new Error(`Start [${r}, ${c}] is out of bounds`);
-                    }
-                    if (grid[r][c] === 1) {
-                        throw new Error('Start cannot be on an obstacle');
-                    }
-                    setStart(parsedStart);
-                    setShowStartInput(false);
-                    setError('');
-                } catch (e) {
-                    setError(`Invalid start: ${e.message}`);
-                }
-            };
-
-            const applyTargetInput = () => {
-                setError('');
-                try {
-                    const parsedTargets = JSON.parse(targetsInput);
-                    if (!Array.isArray(parsedTargets)) {
-                        throw new Error('Targets must be an array like [[r,c], [r,c]]');
-                    }
-                    
-                    // Clear existing targets from grid
-                    const newGrid = grid.map(row => row.map(cell => cell === 2 ? 0 : cell));
-                    
-                    // Apply targets to grid
-                    for (const target of parsedTargets) {
-                        if (!Array.isArray(target) || target.length !== 2) {
-                            throw new Error('Each target must be [row, col]');
-                        }
-                        const [tr, tc] = target;
-                        if (tr < 0 || tr >= rows || tc < 0 || tc >= cols) {
-                            throw new Error(`Target [${tr}, ${tc}] is out of bounds`);
-                        }
-                        if (newGrid[tr][tc] === 1) {
-                            throw new Error(`Target [${tr}, ${tc}] is on an obstacle`);
-                        }
-                        newGrid[tr][tc] = 2;
-                    }
-                    
-                    setGrid(newGrid);
-                    setShowTargetInput(false);
-                    setError('');
-                } catch (e) {
-                    setError(`Invalid targets: ${e.message}`);
-                }
-            };
-
-            const buildPayload = () => ({ grid, start, targets: getTargets() });
-
-            const runOptimization = async () => {
-                setError('');
-                setStats(null);
-                setComparison([]);
-                clearAnimation();
-                setAnimatedIndex(-1);
-
-                const targets = getTargets();
-                if (!targets.length) {
-                    setError('Please add at least one target.');
-                    return;
-                }
-
-                setPath([]);
-                setLoading(true);
-
-                try {
-                    // Use /route endpoint with exact JSON structure
-                    const res = await fetch('/route', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ grid, start, targets })
-                    });
-
-                    const data = await res.json();
-                    if (!res.ok) {
-                        throw new Error(data.detail || 'Failed to calculate route');
-                    }
-
-                    // Store response: {total_steps, path, target_reached, execution_time_ms}
-                    setStats(data);
-                    const fullPath = data.path || [];
-                    setPath(fullPath);
-                    if (!fullPath.length) {
-                        return;
-                    }
-
-                    setAnimatedIndex(0);
-                    let step = 0;
-                    animationRef.current = setInterval(() => {
-                        step += 1;
-                        if (step >= fullPath.length) {
-                            setAnimatedIndex(fullPath.length - 1);
-                            clearAnimation();
-                            return;
-                        }
-                        setAnimatedIndex(step);
-                    }, 180);
-                } catch (e) {
-                    setError(e.message);
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            const runComparison = async () => {
-                setError('');
-                setComparison([]);
-                clearAnimation();
-                setAnimatedIndex(-1);
-
-                const targets = getTargets();
-                if (!targets.length) {
-                    setError('Please add at least one target before comparing algorithms.');
-                    return;
-                }
-
-                setLoading(true);
-                try {
-                    const res = await fetch('/compare-algorithms', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify(buildPayload())
-                    });
-
-                    const data = await res.json();
-                    if (!res.ok) {
-                        throw new Error(data.detail || 'Comparison failed');
-                    }
-
-                    setComparison(data.results || []);
-                } catch (e) {
-                    setError(e.message);
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            const verifyAccuracy = async () => {
-                setError('');
-                setAccuracy(null);
-
-                const targets = getTargets();
-                if (!targets.length) {
-                    setError('Please add at least one target before verifying accuracy.');
-                    return;
-                }
-
-                setLoading(true);
-                try {
-                    const res = await fetch('/verify-accuracy', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify(buildPayload())
-                    });
-
-                    const data = await res.json();
-                    if (!res.ok) {
-                        throw new Error(data.detail || 'Accuracy verification failed');
-                    }
-
-                    setAccuracy(data);
-                } catch (e) {
-                    setError(e.message);
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            const modeButtonClass = (currentMode) =>
-                `px-3 py-2 rounded-xl font-semibold text-sm transition ${mode === currentMode ? 'bg-indigo-500 text-white shadow' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`;
-
-            const animatedPath = animatedIndex >= 0 ? path.slice(0, animatedIndex + 1) : [];
-            const activePoint = animatedPath.length ? animatedPath[animatedPath.length - 1] : null;
-            const routePoints = animatedPath.map(([r, c]) => {
-                const x = c * (CELL_SIZE + CELL_GAP) + CELL_SIZE / 2;
-                const y = r * (CELL_SIZE + CELL_GAP) + CELL_SIZE / 2;
-                return `${x},${y}`;
-            }).join(' ');
-            const pathIndexMap = new Map(animatedPath.map((point, index) => [`${point[0]}-${point[1]}`, index + 1]));
-            const gridPixelWidth = cols * CELL_SIZE + (cols - 1) * CELL_GAP;
-            const gridPixelHeight = rows * CELL_SIZE + (rows - 1) * CELL_GAP;
-
-            return (
-                <div className={`p-6 max-w-7xl mx-auto ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                    <div className="flex items-center justify-between mb-6">
-                        <div className="flex-1">
-                            <h1 className={`text-4xl font-extrabold mb-2 text-center ${isDarkMode ? 'text-indigo-400' : 'text-indigo-700'}`}>RouteMaster AI - Smart Warehouse Routing</h1>
-                            <p className={`mb-6 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Build a custom warehouse map, optimize routes, and compare algorithms live.</p>
-                        </div>
-                        <button 
-                            onClick={toggleTheme}
-                            className={`ml-4 p-3 rounded-full transition shadow-lg ${isDarkMode ? 'bg-yellow-400 hover:bg-yellow-300' : 'bg-slate-700 hover:bg-slate-600'}`}
-                            title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-                        >
-                            {isDarkMode ? '☀️' : '🌙'}
-                        </button>
-                    </div>
-
-                    <div className="grid lg:grid-cols-3 gap-6 items-start">
-                        <div className={`backdrop-blur p-5 rounded-2xl border shadow-sm ${isDarkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-white/80 border-indigo-100'}`}>
-                            <h2 className={`text-lg font-bold mb-3 ${isDarkMode ? 'text-indigo-400' : 'text-indigo-700'}`}>1) Build Scenario</h2>
-                            <p className={`text-sm mb-3 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Choose a tool and click on cells to design your warehouse map.</p>
-
-                            <div className="mb-3">
-                                <label className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>Grid Size [rows, cols]</label>
-                                <input 
-                                    type="text" 
-                                    value={gridSizeInput} 
-                                    onChange={(e) => setGridSizeInput(e.target.value)}
-                                    placeholder="[6, 8]"
-                                    className={`w-full p-2 rounded-xl border focus:outline-none focus:ring-2 ${isDarkMode ? 'bg-slate-700 border-slate-600 text-white focus:ring-indigo-500' : 'bg-white border-indigo-200 focus:ring-indigo-200'}`}
-                                />
-                            </div>
-
-                            <button onClick={createGrid} className={`w-full mb-3 px-3 py-2 rounded-xl font-semibold transition ${isDarkMode ? 'bg-indigo-600 text-white hover:bg-indigo-500' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'}`}>Create New Grid</button>
-
-                            <div className="grid grid-cols-2 gap-2 mb-3">
-                                <button onClick={() => setMode(MODES.OBSTACLE)} className={modeButtonClass(MODES.OBSTACLE)}>Obstacle</button>
-                                <button onClick={() => setMode(MODES.ERASE)} className={modeButtonClass(MODES.ERASE)}>Erase</button>
-                                <button onClick={() => { setShowStartInput(!showStartInput); setShowTargetInput(false); }} className={`px-3 py-2 rounded-xl font-semibold text-sm transition ${showStartInput ? 'bg-emerald-500 text-white shadow' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}>Set Start</button>
-                                <button onClick={() => { setShowTargetInput(!showTargetInput); setShowStartInput(false); }} className={`px-3 py-2 rounded-xl font-semibold text-sm transition ${showTargetInput ? 'bg-amber-500 text-white shadow' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}>Set Target</button>
-                            </div>
-
-                            {showStartInput && (
-                                <div className={`mb-3 p-3 rounded-xl border ${isDarkMode ? 'bg-emerald-900/50 border-emerald-700' : 'bg-emerald-50 border-emerald-200'}`}>
-                                    <label className={`text-xs font-semibold mb-1 block ${isDarkMode ? 'text-emerald-300' : 'text-emerald-900'}`}>Enter Start [row, col]</label>
-                                    <input 
-                                        type="text" 
-                                        value={startInput} 
-                                        onChange={(e) => setStartInput(e.target.value)}
-                                        placeholder="[0, 0]"
-                                        className={`w-full p-2 text-sm rounded-lg border focus:outline-none focus:ring-2 mb-2 ${isDarkMode ? 'bg-slate-700 border-emerald-600 text-white focus:ring-emerald-500' : 'bg-white border-emerald-300 focus:ring-emerald-400'}`}
-                                    />
-                                    <div className="flex gap-2">
-                                        <button onClick={applyStartInput} className={`flex-1 px-3 py-2 rounded-lg font-semibold text-sm transition ${isDarkMode ? 'bg-emerald-600 text-white hover:bg-emerald-500' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>Apply</button>
-                                        <button onClick={() => setShowStartInput(false)} className={`px-3 py-2 rounded-lg font-semibold text-sm transition ${isDarkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}>Cancel</button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {showTargetInput && (
-                                <div className={`mb-3 p-3 rounded-xl border ${isDarkMode ? 'bg-amber-900/50 border-amber-700' : 'bg-amber-50 border-amber-200'}`}>
-                                    <label className={`text-xs font-semibold mb-1 block ${isDarkMode ? 'text-amber-300' : 'text-amber-900'}`}>Enter Targets [[row, col], ...]</label>
-                                    <input 
-                                        type="text" 
-                                        value={targetsInput} 
-                                        onChange={(e) => setTargetsInput(e.target.value)}
-                                        placeholder="[[2, 1], [3, 4]]"
-                                        className={`w-full p-2 text-sm rounded-lg border focus:outline-none focus:ring-2 mb-2 ${isDarkMode ? 'bg-slate-700 border-amber-600 text-white focus:ring-amber-500' : 'bg-white border-amber-300 focus:ring-amber-400'}`}
-                                    />
-                                    <div className="flex gap-2">
-                                        <button onClick={applyTargetInput} className={`flex-1 px-3 py-2 rounded-lg font-semibold text-sm transition ${isDarkMode ? 'bg-amber-600 text-white hover:bg-amber-500' : 'bg-amber-600 text-white hover:bg-amber-700'}`}>Apply</button>
-                                        <button onClick={() => setShowTargetInput(false)} className={`px-3 py-2 rounded-lg font-semibold text-sm transition ${isDarkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}>Cancel</button>
-                                    </div>
-                                </div>
-                            )}
-
-                            <button onClick={resetBoard} className={`w-full mb-2 px-3 py-2 rounded-xl font-semibold transition ${isDarkMode ? 'bg-rose-900 text-rose-300 hover:bg-rose-800' : 'bg-rose-100 text-rose-700 hover:bg-rose-200'}`}>Reset Board</button>
-
-                            <div className={`text-sm mt-3 space-y-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                                <p>Start: [{start[0]}, {start[1]}] (0-indexed)</p>
-                                <p>Targets: {getTargets().length}</p>
-                                <p>Obstacles: {grid.flat().filter((v) => v === 1).length}</p>
-                                <p className="text-xs mt-1 italic">Grid: {rows} rows × {cols} cols (matrix format)</p>
-                            </div>
-
-                            <div className={`mt-4 p-3 rounded-xl border text-xs ${isDarkMode ? 'bg-indigo-900/50 border-indigo-700 text-slate-300' : 'bg-indigo-50 border-indigo-100 text-slate-600'}`}>
-                                <p className={`font-semibold mb-1 ${isDarkMode ? 'text-indigo-400' : 'text-indigo-700'}`}>Quick guide</p>
-                                <p>1. Click "Set Start" → Enter [row, col]</p>
-                                <p>2. Click "Set Target" → Enter [[row, col], ...]</p>
-                                <p>3. Add obstacles if needed</p>
-                                <p>4. Click "Optimize Route"</p>
-                            </div>
-                        </div>
-
-                        <div className={`backdrop-blur p-5 rounded-2xl border shadow-sm lg:col-span-2 ${isDarkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-white/80 border-indigo-100'}`}>
-                            <div className="flex flex-wrap gap-2 mb-4">
-                                <button onClick={runOptimization} disabled={loading} className="bg-teal-500 text-white px-5 py-2 rounded-full font-bold hover:bg-teal-400 shadow-sm transition disabled:opacity-60">
-                                    {loading ? 'CALCULATING...' : 'Optimize Route'}
-                                </button>
-                                <button onClick={runComparison} disabled={loading} className="bg-violet-500 text-white px-5 py-2 rounded-full font-bold hover:bg-violet-400 shadow-sm transition disabled:opacity-60">
-                                    Compare Algorithms
-                                </button>
-                                <button onClick={verifyAccuracy} disabled={loading} className="bg-amber-500 text-white px-5 py-2 rounded-full font-bold hover:bg-amber-400 shadow-sm transition disabled:opacity-60">
-                                    Verify Accuracy
-                                </button>
-                            </div>
-
-                            {error && <div className={`mb-3 rounded-xl border p-3 ${isDarkMode ? 'text-rose-300 bg-rose-900/50 border-rose-700' : 'text-rose-700 bg-rose-50 border-rose-100'}`}>{error}</div>}
-
-                            <div className="relative inline-block">
-                                <svg
-                                    width={gridPixelWidth}
-                                    height={gridPixelHeight}
-                                    className="absolute top-0 left-0 pointer-events-none"
-                                >
-                                    {animatedPath.length > 1 && (
-                                        <polyline
-                                            points={routePoints}
-                                            fill="none"
-                                            stroke="#22d3ee"
-                                            strokeWidth="6"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            opacity="0.9"
-                                        />
-                                    )}
-                                    {activePoint && (
-                                        <circle
-                                            cx={activePoint[1] * (CELL_SIZE + CELL_GAP) + CELL_SIZE / 2}
-                                            cy={activePoint[0] * (CELL_SIZE + CELL_GAP) + CELL_SIZE / 2}
-                                            r="8"
-                                            fill="#34d399"
-                                        />
-                                    )}
-                                </svg>
-
-                            <div
-                                className="grid gap-2"
-                                style={{
-                                    gridTemplateColumns: `repeat(${grid[0]?.length || 0}, ${CELL_SIZE}px)`,
-                                    gridTemplateRows: `repeat(${grid.length || 0}, ${CELL_SIZE}px)`
-                                }}
-                            >
-                            {grid.map((row, r) => row.map((cell, c) => {
-                                const isP = animatedPath.some(pt => pt[0] === r && pt[1] === c);
-                                const startCell = isStart(r, c);
-                                const targetCell = isTarget(r, c);
-                                const activeCell = activePoint && activePoint[0] === r && activePoint[1] === c;
-                                const stepNumber = pathIndexMap.get(`${r}-${c}`);
-                                return (
-                                    <button
-                                        key={`${r}-${c}`}
-                                        onClick={() => applyCellAction(r, c)}
-                                        className={`flex items-center justify-center rounded relative z-10 text-xs font-semibold transition
-                                        ${cell===1 ? (isDarkMode ? 'bg-slate-600 text-slate-400' : 'bg-slate-300 text-slate-600') : (isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-indigo-50 text-indigo-800')} 
-                                        ${isP ? (isDarkMode ? 'bg-teal-600 shadow-md' : 'bg-teal-300 shadow-md') : ''}
-                                        ${activeCell ? 'ring-2 ring-teal-400 scale-105' : ''} 
-                                        ${targetCell ? 'border-2 border-amber-400' : ''} 
-                                        ${startCell ? 'ring-2 ring-emerald-500' : ''}`}
-                                        style={{ width: `${CELL_SIZE}px`, height: `${CELL_SIZE}px` }}
-                                    >
-                                        {activeCell ? '🚗' : (cell === 1 ? '🪨' : (startCell ? '🚗' : (targetCell ? '🏠' : (stepNumber || ''))))}
-                                    </button>
-                                )
-                            }))}
-                            </div>
-                            </div>
-
-                            <div className="mt-4 grid md:grid-cols-3 gap-3 text-sm">
-                                <div className={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-indigo-50 border-indigo-100'}`}>🪨 Obstacle (stone)</div>
-                                <div className={`p-3 rounded-xl border ${isDarkMode ? 'bg-emerald-900/50 border-emerald-700' : 'bg-emerald-50 border-emerald-100'}`}>🚗 Start Node (car)</div>
-                                <div className={`p-3 rounded-xl border ${isDarkMode ? 'bg-amber-900/50 border-amber-700' : 'bg-amber-50 border-amber-100'}`}>🏠 Target Node (home) | Teal line = moving route</div>
-                            </div>
-
-                            {stats && (
-                                <div className="mt-5 grid md:grid-cols-3 gap-3">
-                                    <div className={`p-3 rounded-xl border shadow-sm ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-white border-indigo-100'}`}>
-                                        <p className={`text-xs ${isDarkMode ? 'text-indigo-400' : 'text-indigo-500'}`}>Total Steps</p>
-                                        <p className={`text-xl font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{stats.total_steps}</p>
-                                    </div>
-                                    <div className={`p-3 rounded-xl border shadow-sm ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-white border-indigo-100'}`}>
-                                        <p className={`text-xs ${isDarkMode ? 'text-indigo-400' : 'text-indigo-500'}`}>Target Reached</p>
-                                        <p className="text-xl font-bold text-emerald-500">{stats.target_reached ? 'true' : 'false'}</p>
-                                    </div>
-                                    <div className={`p-3 rounded-xl border shadow-sm ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-white border-indigo-100'}`}>
-                                        <p className={`text-xs ${isDarkMode ? 'text-indigo-400' : 'text-indigo-500'}`}>Execution Time</p>
-                                        <p className={`text-xl font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{stats.execution_time_ms} ms</p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {comparison.length > 0 && (
-                                <div className={`mt-5 p-3 rounded-xl border shadow-sm overflow-auto ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-white border-indigo-100'}`}>
-                                    <h3 className={`font-bold mb-2 ${isDarkMode ? 'text-indigo-400' : 'text-indigo-700'}`}>Algorithm Comparison</h3>
-                                    <table className="w-full text-sm">
-                                        <thead>
-                                            <tr className={`border-b ${isDarkMode ? 'text-indigo-400 border-slate-600' : 'text-indigo-600 border-indigo-100'}`}>
-                                                <th className="text-left py-2">Algorithm</th>
-                                                <th className="text-left py-2">Steps</th>
-                                                <th className="text-left py-2">Compute Time</th>
-                                                <th className="text-left py-2">Highlights</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {comparison.map((item) => (
-                                                <tr key={item.name} className={`border-b ${isDarkMode ? 'border-slate-600 text-slate-300' : 'border-indigo-50 text-slate-700'}`}>
-                                                    <td className="py-2">{item.name}</td>
-                                                    <td className="py-2">{item.steps}</td>
-                                                    <td className="py-2">{item.compute_time_ms} ms</td>
-                                                    <td className="py-2">
-                                                        {item.is_shortest && <span className="mr-2 px-2 py-1 rounded bg-emerald-100 text-emerald-700 text-xs">Shortest</span>}
-                                                        {item.is_fastest && <span className="px-2 py-1 rounded bg-violet-100 text-violet-700 text-xs">Fastest</span>}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-
-                            {accuracy && (
-                                <div className={`mt-5 p-4 rounded-xl border shadow-sm ${isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-white border-indigo-100'}`}>
-                                    <h3 className={`font-bold mb-3 text-lg ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`}>🎯 Algorithm Performance Analysis</h3>
-                                    
-                                    <div className="grid md:grid-cols-2 gap-4 mb-4">
-                                        <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-gradient-to-br from-emerald-900 to-teal-900' : 'bg-gradient-to-br from-emerald-50 to-teal-50'}`}>
-                                            <p className={`text-xs font-semibold mb-1 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>CHOSEN ALGORITHM</p>
-                                            <h4 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{accuracy.chosen_algorithm}</h4>
-                                            <div className="mt-3 flex items-baseline gap-2">
-                                                <span className={`text-3xl font-bold ${accuracy.accuracy_percentage >= 95 ? 'text-emerald-500' : 'text-teal-500'}`}>
-                                                    {accuracy.accuracy_percentage}%
-                                                </span>
-                                                <span className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Accuracy</span>
-                                            </div>
-                                            <div className="mt-2">
-                                                <span className={`px-3 py-1 rounded-full text-xs font-bold ${accuracy.path_optimality === 'Perfect' ? 'bg-emerald-500 text-white' : accuracy.path_optimality === 'Near-Optimal' ? 'bg-teal-500 text-white' : 'bg-amber-500 text-white'}`}>
-                                                    {accuracy.path_optimality}
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-slate-800' : 'bg-indigo-50'}`}>
-                                            <p className={`text-xs font-semibold mb-2 ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>PERFORMANCE METRICS</p>
-                                            <div className="grid grid-cols-2 gap-2 text-sm">
-                                                <div>
-                                                    <p className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>Total Steps</p>
-                                                    <p className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{accuracy.total_steps}</p>
-                                                </div>
-                                                <div>
-                                                    <p className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>Compute Time</p>
-                                                    <p className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{accuracy.computation_time_ms}ms</p>
-                                                </div>
-                                                <div>
-                                                    <p className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>Theoretical Min</p>
-                                                    <p className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{accuracy.theoretical_minimum}</p>
-                                                </div>
-                                                <div>
-                                                    <p className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>Efficiency</p>
-                                                    <p className={`text-lg font-bold text-emerald-500`}>{accuracy.accuracy_percentage}%</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className={`p-4 rounded-lg mb-4 ${isDarkMode ? 'bg-indigo-900/50' : 'bg-indigo-50'}`}>
-                                        <p className={`text-sm font-bold mb-2 ${isDarkMode ? 'text-indigo-400' : 'text-indigo-700'}`}>💡 Why This Algorithm Was Chosen:</p>
-                                        <div className={`text-sm space-y-1 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                                            {accuracy.reasoning.why_chosen.map((reason, idx) => (
-                                                <p key={idx}>✓ {reason}</p>
-                                            ))}
-                                        </div>
-                                        <div className={`mt-3 p-3 rounded border text-xs ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-white border-indigo-200 text-slate-600'}`}>
-                                            <strong>Key Advantage:</strong> {accuracy.reasoning.key_advantage}
-                                        </div>
-                                    </div>
-
-                                    <div className={`p-4 rounded-lg mb-4 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-50'}`}>
-                                        <p className={`text-sm font-bold mb-2 ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`}>📊 Comparative Performance:</p>
-                                        <div className={`text-sm space-y-1 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                                            <p>• {accuracy.reasoning.vs_dijkstra}</p>
-                                            <p>• {accuracy.reasoning.vs_greedy}</p>
-                                        </div>
-                                    </div>
-
-                                    <div className={`overflow-auto ${isDarkMode ? 'bg-slate-800' : 'bg-white'} rounded-lg p-3`}>
-                                        <p className={`text-sm font-bold mb-2 ${isDarkMode ? 'text-violet-400' : 'text-violet-600'}`}>All Algorithms Tested:</p>
-                                        <table className="w-full text-sm">
-                                            <thead>
-                                                <tr className={`border-b ${isDarkMode ? 'text-slate-400 border-slate-600' : 'text-slate-600 border-slate-200'}`}>
-                                                    <th className="text-left py-2">Algorithm</th>
-                                                    <th className="text-left py-2">Steps</th>
-                                                    <th className="text-left py-2">Time (ms)</th>
-                                                    <th className="text-left py-2">Accuracy</th>
-                                                    <th className="text-left py-2">Status</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {accuracy.algorithm_comparison.map((algo, idx) => (
-                                                    <tr key={idx} className={`border-b ${isDarkMode ? 'border-slate-700 text-slate-300' : 'border-slate-100 text-slate-700'}`}>
-                                                        <td className="py-2 font-semibold">{algo.name}</td>
-                                                        <td className="py-2">{algo.steps}</td>
-                                                        <td className="py-2">{algo.time_ms}</td>
-                                                        <td className="py-2">
-                                                            <span className={`font-bold ${algo.accuracy >= 95 ? 'text-emerald-500' : algo.accuracy >= 85 ? 'text-teal-500' : 'text-amber-500'}`}>
-                                                                {algo.accuracy}%
-                                                            </span>
-                                                        </td>
-                                                        <td className="py-2">
-                                                            {algo.is_best && <span className="px-2 py-1 rounded bg-emerald-500 text-white text-xs font-bold">Best Path</span>}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
+        <!-- Accuracy Panel -->
+        <div id="accuracySection" style="display:none" class="accuracy-panel">
+          <div class="table-wrap" style="padding:16px">
+            <h3 style="padding:0 0 12px">🎯 Algorithm Performance Analysis</h3>
+            <div class="acc-hero">
+              <div class="acc-card">
+                <div class="acc-label">Chosen Algorithm</div>
+                <div class="acc-algo" id="accAlgo">A* Algorithm</div>
+                <div class="acc-pct" id="accPct">—%</div>
+                <div id="accBadge" style="margin-top:6px"></div>
+              </div>
+              <div class="acc-metrics">
+                <div class="acc-label" style="color:var(--accent); margin-bottom:8px">Performance Metrics</div>
+                <div class="acc-metrics-grid">
+                  <div><div class="acc-metric-label">Total Steps</div><div class="acc-metric-val" id="accSteps">—</div></div>
+                  <div><div class="acc-metric-label">Compute Time</div><div class="acc-metric-val" id="accTime">—</div></div>
+                  <div><div class="acc-metric-label">Theoretical Min</div><div class="acc-metric-val" id="accMin">—</div></div>
+                  <div><div class="acc-metric-label">Efficiency</div><div class="acc-metric-val" style="color:#22c55e" id="accEff">—</div></div>
                 </div>
-            );
-        }
+              </div>
+            </div>
+            <div id="accReasons" style="margin-bottom:12px; padding:12px; background:var(--cell-free); border-radius:12px; font-size:0.85rem; line-height:1.7"></div>
+            <table>
+              <thead>
+                <tr><th>Algorithm</th><th>Steps</th><th>Time (ms)</th><th>Accuracy</th><th>Status</th></tr>
+              </thead>
+              <tbody id="accuracyBody"></tbody>
+            </table>
+          </div>
+        </div>
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── STATE ────────────────────────────────────────────────────
+let rows = 6, cols = 8;
+let grid = makeGrid(rows, cols);
+let start = [0, 0];
+let mode = 'obstacle';
+let path = [];
+let animTimer = null;
+let animIdx = -1;
+let isDark = false;
+let isMouseDown = false;
+
+function makeGrid(r, c) {
+  return Array.from({ length: r }, () => Array(c).fill(0));
+}
+
+// ─── THEME ────────────────────────────────────────────────────
+document.getElementById('themeBtn').addEventListener('click', () => {
+  isDark = !isDark;
+  document.body.classList.toggle('dark', isDark);
+  document.getElementById('themeBtn').textContent = isDark ? '☀️' : '🌙';
+});
+
+// ─── MODE ─────────────────────────────────────────────────────
+function setMode(m) {
+  mode = m;
+  closeStartInput(); closeTargetInput();
+  ['Obstacle','Erase','Start','Target'].forEach(n => {
+    document.getElementById('mode'+n)?.classList.remove('active');
+  });
+  if (m === 'obstacle') document.getElementById('modeObstacle').classList.add('active');
+  if (m === 'erase')    document.getElementById('modeErase').classList.add('active');
+  if (m === 'start')    document.getElementById('modeStart').classList.add('active');
+  if (m === 'target')   document.getElementById('modeTarget').classList.add('active');
+}
+
+function toggleStartInput() {
+  const el = document.getElementById('startSubInput');
+  const open = el.classList.contains('open');
+  closeTargetInput();
+  if (open) { closeStartInput(); } else {
+    el.classList.add('open');
+    document.getElementById('modeStart').classList.add('active');
+  }
+}
+function closeStartInput() {
+  document.getElementById('startSubInput').classList.remove('open');
+  document.getElementById('modeStart').classList.remove('active');
+}
+function toggleTargetInput() {
+  const el = document.getElementById('targetSubInput');
+  const open = el.classList.contains('open');
+  closeStartInput();
+  if (open) { closeTargetInput(); } else {
+    el.classList.add('open');
+    document.getElementById('modeTarget').classList.add('active');
+  }
+}
+function closeTargetInput() {
+  document.getElementById('targetSubInput').classList.remove('open');
+  document.getElementById('modeTarget').classList.remove('active');
+}
+
+// ─── GRID CREATION ────────────────────────────────────────────
+function createGrid() {
+  try {
+    const parsed = JSON.parse(document.getElementById('gridSizeInput').value);
+    if (!Array.isArray(parsed) || parsed.length < 2) throw new Error('Use [rows, cols]');
+    rows = Math.max(2, Math.min(20, +parsed[0]));
+    cols = Math.max(2, Math.min(20, +parsed[1]));
+    grid = makeGrid(rows, cols);
+    start = [0, 0];
+    path = []; animIdx = -1; clearInterval(animTimer);
+    clearError(); hideResults();
+    renderGrid();
+    updateInfo();
+  } catch(e) { showError('Invalid grid size: ' + e.message); }
+}
+
+// ─── APPLY START ──────────────────────────────────────────────
+function applyStart() {
+  try {
+    const p = JSON.parse(document.getElementById('startInput').value);
+    if (!Array.isArray(p) || p.length < 2) throw new Error('Use [row, col]');
+    const [r,c] = p;
+    if (r<0||r>=rows||c<0||c>=cols) throw new Error(`Out of bounds`);
+    if (grid[r][c]===1) throw new Error('Cannot place on obstacle');
+    start = [r,c];
+    clearError(); closeStartInput();
+    renderGrid(); updateInfo();
+  } catch(e) { showError('Invalid start: ' + e.message); }
+}
+
+// ─── APPLY TARGETS ────────────────────────────────────────────
+function applyTargets() {
+  try {
+    const arr = JSON.parse(document.getElementById('targetsInput').value);
+    if (!Array.isArray(arr)) throw new Error('Must be array');
+    const newGrid = grid.map(row => row.map(c => c===2?0:c));
+    for (const t of arr) {
+      if (!Array.isArray(t)||t.length<2) throw new Error('Each target: [r,c]');
+      const [r,c] = t;
+      if (r<0||r>=rows||c<0||c>=cols) throw new Error(`[${r},${c}] out of bounds`);
+      if (newGrid[r][c]===1) throw new Error(`[${r},${c}] is obstacle`);
+      newGrid[r][c] = 2;
+    }
+    grid = newGrid; clearError(); closeTargetInput();
+    renderGrid(); updateInfo();
+  } catch(e) { showError('Invalid targets: ' + e.message); }
+}
+
+// ─── RESET ────────────────────────────────────────────────────
+function resetBoard() {
+  grid = makeGrid(rows, cols);
+  start = [0, 0];
+  path = []; animIdx = -1; clearInterval(animTimer);
+  clearError(); hideResults();
+  renderGrid(); updateInfo();
+}
+
+// ─── CELL CLICK ───────────────────────────────────────────────
+function cellClick(r, c) {
+  path = []; animIdx = -1; clearInterval(animTimer); hideResults();
+  if (mode === 'obstacle') {
+    if (r===start[0]&&c===start[1]) return;
+    if (grid[r][c]!==1) grid[r][c] = 1; else grid[r][c]=0;
+  } else if (mode === 'erase') {
+    grid[r][c] = 0;
+  }
+  renderGrid(); updateInfo();
+}
+function cellDrag(r, c) {
+  if (!isMouseDown) return;
+  if (mode==='obstacle') {
+    if (r===start[0]&&c===start[1]) return;
+    grid[r][c] = 1;
+    renderGrid(); updateInfo();
+  } else if (mode==='erase') {
+    grid[r][c] = 0;
+    renderGrid(); updateInfo();
+  }
+}
+
+// ─── RENDER GRID ──────────────────────────────────────────────
+const CELL = 52, GAP = 6;
+
+function renderGrid() {
+  const container = document.getElementById('warehouseGrid');
+  container.style.gridTemplateColumns = `repeat(${cols}, ${CELL}px)`;
+  container.style.gridTemplateRows    = `repeat(${rows}, ${CELL}px)`;
+  container.style.gap = GAP+'px';
+  container.innerHTML = '';
+
+  const pathSet = new Set(path.map(p=>`${p[0]}-${p[1]}`));
+  const animSet = new Set((animIdx>=0?path.slice(0,animIdx+1):[]).map(p=>`${p[0]}-${p[1]}`));
+  const robot = animIdx>=0 ? path[animIdx] : null;
+
+  for (let r=0; r<rows; r++) {
+    for (let c=0; c<cols; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      const key = `${r}-${c}`;
+      const isStart = r===start[0]&&c===start[1];
+      const isTarget = grid[r][c]===2;
+      const isWall = grid[r][c]===1;
+      const isRobot = robot&&robot[0]===r&&robot[1]===c;
+      const onPath = animSet.has(key);
+
+      if (isWall) cell.classList.add('wall');
+      else if (isStart) cell.classList.add('start-cell');
+      else if (isTarget) cell.classList.add('target-cell');
+      else if (onPath) cell.classList.add('on-path');
+
+      if (isRobot) cell.classList.add('robot');
+
+      if (isRobot || isStart) cell.textContent = '🚗';
+      else if (isWall) cell.textContent = '🪨';
+      else if (isTarget) cell.textContent = '🏠';
+      else {
+        // Show step number if on animated path
+        const idx = path.findIndex(p=>p[0]===r&&p[1]===c);
+        if (idx > 0 && animSet.has(key)) {
+          const num = document.createElement('span');
+          num.className = 'step-num'; num.textContent = idx;
+          cell.appendChild(num);
+        }
+      }
+
+      cell.addEventListener('click', ()=>cellClick(r,c));
+      cell.addEventListener('mouseenter', ()=>cellDrag(r,c));
+      container.appendChild(cell);
+    }
+  }
+
+  // Draw SVG route
+  drawRoute();
+  updateSvgSize();
+}
+
+function drawRoute() {
+  const svg = document.getElementById('routeSvg');
+  svg.innerHTML = '';
+  const animPath = animIdx>=0 ? path.slice(0,animIdx+1) : [];
+  if (animPath.length < 2) return;
+
+  const pts = animPath.map(([r,c]) =>
+    `${c*(CELL+GAP)+CELL/2},${r*(CELL+GAP)+CELL/2}`
+  ).join(' ');
+
+  const poly = document.createElementNS('http://www.w3.org/2000/svg','polyline');
+  poly.setAttribute('points', pts);
+  poly.setAttribute('fill','none');
+  poly.setAttribute('stroke','#22d3ee');
+  poly.setAttribute('stroke-width','5');
+  poly.setAttribute('stroke-linecap','round');
+  poly.setAttribute('stroke-linejoin','round');
+  poly.setAttribute('opacity','0.85');
+  svg.appendChild(poly);
+}
+
+function updateSvgSize() {
+  const svg = document.getElementById('routeSvg');
+  const w = cols*(CELL+GAP)-GAP;
+  const h = rows*(CELL+GAP)-GAP;
+  svg.setAttribute('width', w);
+  svg.setAttribute('height', h);
+}
+
+// ─── INFO UPDATE ──────────────────────────────────────────────
+function updateInfo() {
+  document.getElementById('startInfo').textContent = `[${start[0]}, ${start[1]}]`;
+  document.getElementById('targetInfo').textContent = getTargets().length;
+  document.getElementById('obstacleInfo').textContent = grid.flat().filter(v=>v===1).length;
+  document.getElementById('gridInfo').textContent = `${rows} × ${cols}`;
+}
+
+function getTargets() {
+  const t = [];
+  for (let r=0;r<rows;r++) for (let c=0;c<cols;c++) if (grid[r][c]===2) t.push([r,c]);
+  return t;
+}
+
+// ─── ERROR ────────────────────────────────────────────────────
+function showError(msg) {
+  const el = document.getElementById('errorBox');
+  el.textContent = msg; el.classList.add('show');
+}
+function clearError() {
+  document.getElementById('errorBox').classList.remove('show');
+}
+function hideResults() {
+  document.getElementById('statsSection').style.display='none';
+  document.getElementById('comparisonSection').style.display='none';
+  document.getElementById('accuracySection').style.display='none';
+}
+
+// ─── LOADING STATE ────────────────────────────────────────────
+function setLoading(btnId, labelId, loading, text) {
+  const btn = document.getElementById(btnId);
+  const lbl = document.getElementById(labelId);
+  btn.disabled = loading;
+  if (loading) {
+    lbl.innerHTML = '<div class="spinner"></div>';
+  } else {
+    lbl.textContent = text;
+  }
+}
+
+// ─── API CALLS ────────────────────────────────────────────────
+async function runOptimization() {
+  clearError(); hideResults();
+  const targets = getTargets();
+  if (!targets.length) { showError('Add at least one target first.'); return; }
+  path=[]; animIdx=-1; clearInterval(animTimer); renderGrid();
+  setLoading('btnOptimize','optimizeLabel',true,'');
+  try {
+    const res = await fetch('/route',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({grid, start, targets})
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail||'Route failed');
+    path = data.path||[];
+    document.getElementById('statSteps').textContent = data.total_steps ?? '—';
+    document.getElementById('statReached').textContent = data.target_reached ? '✅ Yes' : '❌ No';
+    document.getElementById('statTime').textContent = (data.execution_time_ms??'—') + ' ms';
+    document.getElementById('statsSection').style.display='';
+    animatePath();
+  } catch(e) { showError(e.message); }
+  finally { setLoading('btnOptimize','optimizeLabel',false,'⚡ Optimize Route'); }
+}
+
+async function runComparison() {
+  clearError();
+  document.getElementById('comparisonSection').style.display='none';
+  const targets = getTargets();
+  if (!targets.length) { showError('Add at least one target first.'); return; }
+  setLoading('btnCompare','compareLabel',true,'');
+  try {
+    const res = await fetch('/compare-algorithms',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({grid, start, targets})
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail||'Comparison failed');
+    const tbody = document.getElementById('comparisonBody');
+    tbody.innerHTML = '';
+    for (const item of (data.results||[])) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><strong>${item.name}</strong></td>
+        <td>${item.steps}</td>
+        <td>${item.compute_time_ms} ms</td>
+        <td>
+          ${item.is_shortest?'<span class="badge badge-green">Shortest</span>':''}
+          ${item.is_fastest?'<span class="badge badge-violet">Fastest</span>':''}
+        </td>`;
+      tbody.appendChild(tr);
+    }
+    document.getElementById('comparisonSection').style.display='';
+  } catch(e) { showError(e.message); }
+  finally { setLoading('btnCompare','compareLabel',false,'📊 Compare Algorithms'); }
+}
+
+async function verifyAccuracy() {
+  clearError();
+  document.getElementById('accuracySection').style.display='none';
+  const targets = getTargets();
+  if (!targets.length) { showError('Add at least one target first.'); return; }
+  setLoading('btnAccuracy','accuracyLabel',true,'');
+  try {
+    const res = await fetch('/verify-accuracy',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({grid, start, targets})
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail||'Accuracy check failed');
+
+    document.getElementById('accAlgo').textContent = data.chosen_algorithm;
+    document.getElementById('accPct').textContent = data.accuracy_percentage + '%';
+    document.getElementById('accSteps').textContent = data.total_steps;
+    document.getElementById('accTime').textContent = data.computation_time_ms + ' ms';
+    document.getElementById('accMin').textContent = data.theoretical_minimum;
+    document.getElementById('accEff').textContent = data.accuracy_percentage + '%';
+
+    const opt = data.path_optimality||'';
+    const badgeColor = opt==='Perfect'?'badge-green':opt==='Near-Optimal'?'badge-blue':'badge-violet';
+    document.getElementById('accBadge').innerHTML = `<span class="badge ${badgeColor}">${opt}</span>`;
+
+    // Reasons
+    const r = data.reasoning||{};
+    document.getElementById('accReasons').innerHTML = `
+      <strong>💡 Why Chosen:</strong><br>
+      ${(r.why_chosen||[]).map(x=>`✓ ${x}`).join('<br>')}
+      <br><br>
+      <strong>Key advantage:</strong> ${r.key_advantage||''}<br>
+      • ${r.vs_dijkstra||''}<br>• ${r.vs_greedy||''}
+    `;
+
+    // Table
+    const tbody = document.getElementById('accuracyBody');
+    tbody.innerHTML='';
+    for (const algo of (data.algorithm_comparison||[])) {
+      const tr = document.createElement('tr');
+      const ac = algo.accuracy>=95?'#22c55e':algo.accuracy>=85?'#14b8a6':'#f59e0b';
+      tr.innerHTML = `
+        <td><strong>${algo.name}</strong></td>
+        <td>${algo.steps}</td>
+        <td>${algo.time_ms}</td>
+        <td><strong style="color:${ac}">${algo.accuracy}%</strong></td>
+        <td>${algo.is_best?'<span class="badge badge-green">Best Path</span>':''}</td>`;
+      tbody.appendChild(tr);
+    }
+    document.getElementById('accuracySection').style.display='';
+  } catch(e) { showError(e.message); }
+  finally { setLoading('btnAccuracy','accuracyLabel',false,'🎯 Verify Accuracy'); }
+}
+
+// ─── PATH ANIMATION ───────────────────────────────────────────
+function animatePath() {
+  clearInterval(animTimer);
+  animIdx = 0;
+  renderGrid();
+  animTimer = setInterval(()=>{
+    animIdx++;
+    if (animIdx >= path.length) { animIdx = path.length-1; clearInterval(animTimer); }
+    renderGrid();
+  }, 150);
+}
+
+// ─── MOUSE DRAG ───────────────────────────────────────────────
+document.addEventListener('mousedown', ()=> isMouseDown=true);
+document.addEventListener('mouseup',   ()=> isMouseDown=false);
+
+// ─── INIT ─────────────────────────────────────────────────────
+renderGrid();
+updateInfo();
+</script>
 </body>
 </html>
